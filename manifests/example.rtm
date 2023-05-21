@@ -1,0 +1,6 @@
+CALL_METHOD Address("${account_address}") "lock_fee" Decimal("100");
+
+CALL_METHOD Address("${component_address}") "add_movie" "New_Movie";
+CALL_METHOD Address("${account_address}") "deposit_batch" Expression("ENTIRE_WORKTOP");
+
+DROP_ALL_PROOFS;
