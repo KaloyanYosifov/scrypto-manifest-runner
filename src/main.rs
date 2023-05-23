@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs, path::Path, process::Command};
+use std::{collections::HashMap, env, fs, io::Error, path::Path, process::Command};
 
 use clap::Parser;
 
@@ -45,6 +45,24 @@ fn parse_arguments(arguments: Vec<String>) -> ManifestArguments {
     map
 }
 
+fn within_temp_dir(
+    callable: &dyn Fn(&str) -> Result<(), std::io::Error>,
+) -> Result<(), std::io::Error> {
+    let mut path = env::current_dir()?;
+
+    path.push("___tmp_manifests___");
+
+    if !path.exists() {
+        fs::create_dir(&path)?;
+    }
+
+    callable(path.to_str().unwrap())?;
+
+    fs::remove_dir_all(path)?;
+
+    Ok(())
+}
+
 fn main() {
     let args = Args::parse();
     let manifest_path = Path::new(&args.manifest);
@@ -56,22 +74,28 @@ fn main() {
     match fs::read_to_string(manifest_path) {
         Ok(data) => {
             let parsed_arguments = parse_arguments(args.arguments);
-            let replaced = replace_variables(data, parsed_arguments);
+            let replaced = &replace_variables(data, parsed_arguments);
 
-            // TODO: store into a temp file
+            within_temp_dir(&|path: &str| {
+                let transaction_file = format!("{}/{}", path, "test.rtm");
 
-            // call with temp file
-            let output = Command::new("resim")
-                .arg("run")
-                .arg(args.manifest)
-                .output()
-                .expect("Failed to execute command");
+                fs::write(&transaction_file, replaced)?;
 
-            // print output and error
-            print!("{}", String::from_utf8_lossy(&output.stdout));
-            print!("{}", String::from_utf8_lossy(&output.stderr));
+                println!("Gucci {}", transaction_file);
 
-            // delete temp file
+                let output = Command::new("resim")
+                    .arg("run")
+                    .arg(transaction_file)
+                    .output()
+                    .expect("Failed to execute command");
+
+                // print output and error
+                print!("{}", String::from_utf8_lossy(&output.stdout));
+                print!("{}", String::from_utf8_lossy(&output.stderr));
+
+                Ok(())
+            })
+            .unwrap();
         }
         _ => panic!("Lol"),
     }
